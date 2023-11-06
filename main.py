@@ -12,35 +12,33 @@ if not os.path.exists('embed_data'):
   
 try:
     df = pd.read_csv('embed_data/df.csv', sep='\t')
-    df_image_embeds = np.load('embed_data/df_image_embeds.npy')
-    df_image_embeds = [x.flatten() for x in df_image_embeds]
 except:
     df = None
-    df_image_embeds = None
 
-def search_by_text(text, top_k, use_cluster_search):
-    if df is None or df_image_embeds is None:
+def search_by_text(text, top_k):
+    if df is None:
         return
-
-    top_k_df = get_top_k_text_similarities(text, df, df_image_embeds, top_k, use_cluster_search)
+    top_k_df = get_top_k_text_similarities(text, df, top_k)
+    print(top_k_df.to_numpy())
 
     images = []
     for i, row in top_k_df.iterrows():
         images.append(Image.open(row['image_path']))
 
-    return images
+    # return list(zip(images, top_k_df.image_path.to_numpy()))
+    return zip(top_k_df.image_path.to_numpy(), top_k_df.image_path.to_numpy())
 
-def search_by_image(image, top_k, use_cluster_search):
-    if df is None or df_image_embeds is None:
+def search_by_image(image, top_k):
+    if df is None:
         return
-
-    top_k_df = get_top_k_image_similarities(image, df, df_image_embeds, top_k, use_cluster_search)
-
+    top_k_df = get_top_k_image_similarities(image, df, top_k)
+    print(top_k_df.to_numpy())
     images = []
     for i, row in top_k_df.iterrows():
         images.append(Image.open(row['image_path']))
 
-    return images
+    # return list(zip(images, top_k_df.image_path.to_numpy()))
+    return zip(top_k_df.image_path.to_numpy(), top_k_df.image_path.to_numpy())
 
 def scan_dir(path):
     if path is None or not os.path.exists(path):
@@ -48,11 +46,9 @@ def scan_dir(path):
 
     scan_directory(path)
 
-    global df, df_image_embeds
+    global df
 
     df = pd.read_csv('embed_data/df.csv', sep='\t')
-    df_image_embeds = np.load('embed_data/df_image_embeds.npy')
-    df_image_embeds = [x.flatten() for x in df_image_embeds]
 
 
 with gr.Blocks() as webui:
@@ -67,7 +63,6 @@ with gr.Blocks() as webui:
 
                 with gr.Column():
                     top_k_slider = gr.Slider(label="Top K", minimum=1, maximum=50, step=1, value=5, info = "Top K closest results to the query")
-                    use_cluster_search = gr.Checkbox(label="Use cluster search", value=False, info="Faster embedding search using clusters, may be less accurate")
                     search_by_text_btn = gr.Button("Search by text")
                     search_by_image_btn = gr.Button("Search by image")
 
@@ -79,13 +74,13 @@ with gr.Blocks() as webui:
 
     search_by_text_btn.click(
         search_by_text, 
-        inputs = [text, top_k_slider, use_cluster_search], 
+        inputs = [text, top_k_slider], 
         outputs = gallery
     )
 
     search_by_image_btn.click(
         search_by_image,
-        inputs = [image, top_k_slider, use_cluster_search],
+        inputs = [image, top_k_slider],
         outputs = gallery
     )
 
@@ -96,4 +91,4 @@ with gr.Blocks() as webui:
     )
 
 webui.queue()
-webui.launch()
+webui.launch(share=True)

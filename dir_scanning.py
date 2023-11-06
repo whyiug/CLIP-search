@@ -2,69 +2,68 @@
 import os
 import pandas as pd
 import numpy as np
-import torch
 from tqdm import tqdm
+import torch
 from clip import clip_searcher
 from clusterer import image_indexer
 from PIL import Image
 
+def walk_directory(base):
+    for root, ds, fs in os.walk(base):
+        for f in fs:
+            if f.lower().endswith(('.bmp', '.dib', '.png', '.jpg', '.jpeg', '.pbm', '.pgm', '.ppm', '.tif', '.tiff')) and not f.startswith('.'):
+                fullname = os.path.join(root, f)
+                yield fullname
 
-tqdm.pandas()
-
-os.environ['HUGGINGFACE_HUB_CACHE'] = 'D:\\Code\\Huggingface_cache\\'
-
-path = 'D:\\Code\\Diffusion_Images'
 
 def scan_directory(path):
     df = pd.DataFrame(columns=['image_path'])
     df_image_embeds = []
-
-    for i, img in tqdm(enumerate(os.listdir(path)), total=len(os.listdir(path))):
-        df.loc[i, 'image_path'] = path + '\\' + img
-        df_image_embeds.append(clip_searcher.get_image_features(Image.open(path + '\\' + img)).flatten())
+    i = 0
+    image_paths = []
+    for img in walk_directory(path):
+        image_paths.append(img)
+    
+    print("## Length of image: ", len(image_paths))
+    for i, v in tqdm(enumerate(image_paths), total=len(image_paths)):
+        df.loc[i, 'image_path'] = v
+        df_image_embeds.append(clip_searcher.get_image_features(Image.open(v)).flatten())
+        i += 1
 
     df.to_csv('embed_data/df.csv',  sep='\t')
-    np.save('embed_data/df_image_embeds.npy', df_image_embeds)
-
     image_indexer.fit(df_image_embeds)
 
     return df, df_image_embeds
 
-def compute_similarity(embeds: str, df: pd.DataFrame, df_image_embeds: list, top_k: int = 5, use_cluster_search: bool = False):
+def compute_similarity(embeds: str, df: pd.DataFrame, top_k: int = 5):
+    score, ids = image_indexer.predict(embeds, top_k)
 
-    if not use_cluster_search:
-        df['cos_sim'] = pd.Series(df_image_embeds).progress_apply(lambda x: torch.nn.functional.cosine_similarity(torch.tensor(x), torch.tensor(embeds)))
-        df = df.sort_values(by='cos_sim', ascending=False)[: top_k]
+    ids = [id for id in ids if id != -1]
+    score = score[:len(ids)]
 
-        return df.reset_index()
-    else:
-        score, ids, _ = image_indexer.predict(df_image_embeds, embeds, top_k)
-  
-        ids = [id for id in ids if id != -1]
-        score = score[:len(ids)]
+    df = df.loc[ids]
+    df['score'] = score
 
-        df = df.loc[ids]
-        df['score'] = score
-
-        df = df.sort_values(by='score', ascending=False)
-        
-        return df.reset_index()
+    df = df.sort_values(by='score', ascending=False)
+    # df = df.sort_values(by='score', ascending=True)
+    
+    return df.reset_index()
 
 
-def get_top_k_text_similarities(text: str, df: pd.DataFrame, df_image_embeds: list, top_k: int = 5, use_cluster_search: bool = False):
+def get_top_k_text_similarities(text: str, df: pd.DataFrame, top_k: int = 5):
 
     text_embeds = clip_searcher.get_text_features(text)
     
-    return compute_similarity(text_embeds, df, df_image_embeds, top_k, use_cluster_search)
+    return compute_similarity(text_embeds, df, top_k)
 
-def get_top_k_image_similarities(image, df: pd.DataFrame, df_image_embeds: list, top_k: int = 5, use_cluster_search: bool = False):
+def get_top_k_image_similarities(image, df: pd.DataFrame, top_k: int = 5):
 
     if type(image) == str:
         image = Image.open(image)
 
     image_embeds = clip_searcher.get_image_features(image)
     
-    return compute_similarity(image_embeds, df, df_image_embeds, top_k, use_cluster_search)
+    return compute_similarity(image_embeds, df, top_k)
         
 
 # scan_directory(path)
