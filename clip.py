@@ -4,7 +4,6 @@ import os
 from PIL import Image
 from transformers import ChineseCLIPProcessor, ChineseCLIPModel
 
-# your models cache will be stored here
 
 # base_path = "/Users/forrest/blue/code/github/personal-image-search"
 # os.environ['HUGGINGFACE_HUB_CACHE'] = base_path + '/model_cache'
